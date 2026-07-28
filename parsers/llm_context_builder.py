@@ -1,6 +1,6 @@
 import json
 
-INPUT_FILE = "reports/prioritized_findings_v2.json"
+INPUT_FILE = "reports/final_prioritized_findings.json"
 OUTPUT_FILE = "reports/llm_contexts.json"
 
 
