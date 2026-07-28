@@ -24,7 +24,13 @@ class RuntimeCorrelator:
                 traces[event.trace_id].append(event)
 
         for finding in findings:
-            finding_id = finding.get("title", finding.get("incident", finding.get("id", "Unknown")))
+            finding_id = (
+                finding.get("finding_id")
+                or finding.get("id")
+                or finding.get("title")
+                or finding.get("incident")
+                or "Unknown"
+            )
 
             # 1. Match by URL/Endpoint (Common for DAST)
             if "file" in finding: # Often used for endpoint in DAST findings in this project

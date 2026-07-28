@@ -1,8 +1,34 @@
 import json
-
+import os
 INPUT_FILE = "reports/reachable_findings.json"
 OUTPUT_FILE = "reports/final_prioritized_findings.json"
+RUNTIME_EVIDENCE_FILE = "reports/runtime_evidence.json"
 
+
+def load_runtime_evidence():
+    """
+    Loads runtime evidence and creates a lookup
+    using finding_id as the key.
+    """
+
+    if not os.path.exists(RUNTIME_EVIDENCE_FILE):
+        return {}
+
+    with open(RUNTIME_EVIDENCE_FILE) as f:
+        evidence = json.load(f)
+
+    lookup = {}
+
+    for item in evidence:
+
+        finding_id = item.get("finding_id")
+
+        if not finding_id:
+            continue
+
+        lookup.setdefault(finding_id, []).append(item)
+
+    return lookup
 
 SEVERITY_SCORES = {
     "CRITICAL": 50,
@@ -31,6 +57,12 @@ ATTACK_PATH_KEYWORDS = [
     "Command Injection",
     "Deserialization"
 ]
+
+RUNTIME_BONUS = {
+    "reachability": 15,
+    "code_execution": 30,
+    "sink_reached": 50
+}
 
 
 def calculate_score(finding):
@@ -82,6 +114,27 @@ def calculate_score(finding):
 
     return score
 
+def runtime_bonus(finding, runtime_lookup):
+    """
+    Returns a score bonus based on runtime evidence.
+    """
+
+    finding_id = finding.get("finding_id")
+
+    if not finding_id:
+        return 0
+
+    evidence = runtime_lookup.get(finding_id)
+
+    if not evidence:
+        return 0
+
+    if not evidence.get("confirmed", False):
+        return 0
+
+    evidence_type = evidence.get("evidence_type", "")
+
+    return RUNTIME_BONUS.get(evidence_type, 0)
 
 def priority(score):
 
@@ -99,21 +152,28 @@ def priority(score):
 
 def main():
     import os
+
     if not os.path.exists(INPUT_FILE):
         print(f"[!] {INPUT_FILE} not found. Skipping prioritization.")
-        with open(OUTPUT_FILE, "w") as f:
-            json.dump([], f)
         return
 
     with open(INPUT_FILE) as f:
         findings = json.load(f)
 
-    results = []
+    runtime_lookup = load_runtime_evidence()
 
+    print(
+        f"[+] Loaded {len(runtime_lookup)} runtime evidence entries."
+    )
+
+    results = []
     for finding in findings:
 
-        final_score = calculate_score(
-            finding
+        final_score = calculate_score(finding)
+
+        final_score += runtime_bonus(
+            finding,
+            runtime_lookup
         )
 
         finding[
@@ -158,3 +218,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
