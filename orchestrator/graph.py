@@ -22,6 +22,8 @@ from agents.attack_path_agent import run as attack_path_agent
 from agents.security_reasoning_agent import run as security_reasoning_agent
 from agents.remediation_agent import run as remediation_agent
 from agents.report_agent import run as report_agent
+from parsers.llm_context_builder import run as llm_context_builder
+
 
 # Runtime Intelligence
 from runtime.collector.otel_collector import OTelFileCollector
@@ -115,6 +117,9 @@ def main():
     if run_repo:
         state = pipeline_agent(state)
         # pipeline_agent logs its own [✓] stages as requested
+
+        state = llm_context_builder(state)
+        print_stage("LLM Context Builder")
 
     # Bridge Mode 1 & 2 Findings
     if run_repo or run_url:

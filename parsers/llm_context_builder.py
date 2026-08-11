@@ -37,14 +37,12 @@ def build_summary(finding):
     )
 
     if endpoints:
-
         text.append(
             "Endpoints: "
             + ", ".join(endpoints[:5])
         )
 
     if methods:
-
         text.append(
             "Methods: "
             + ", ".join(methods[:5])
@@ -53,7 +51,7 @@ def build_summary(finding):
     return ". ".join(text)
 
 
-def main():
+def run(state):
 
     with open(INPUT_FILE) as f:
         findings = json.load(f)
@@ -67,14 +65,53 @@ def main():
             "finding_id":
                 finding["finding_id"],
 
+            "tool":
+                finding.get("tool"),
+
+            "category":
+                finding.get("category"),
+
             "title":
                 finding["title"],
+
+            "description":
+                finding.get("description", ""),
 
             "severity":
                 finding["severity"],
 
             "priority":
                 finding["priority"],
+
+            "final_score":
+                finding.get("final_score", 0),
+
+            "confidence":
+                finding.get("confidence"),
+
+            "likelihood":
+                finding.get("likelihood"),
+
+            "impact":
+                finding.get("impact"),
+
+            "vulnerability_class":
+                finding.get(
+                    "vulnerability_class",
+                    []
+                ),
+
+            "cwe":
+                finding.get(
+                    "cwe",
+                    []
+                ),
+
+            "owasp":
+                finding.get(
+                    "owasp",
+                    []
+                ),
 
             "file":
                 finding["file"],
@@ -88,6 +125,12 @@ def main():
             "api_endpoints":
                 finding.get(
                     "api_endpoints",
+                    []
+                ),
+
+            "methods":
+                finding.get(
+                    "methods",
                     []
                 ),
 
@@ -108,14 +151,21 @@ def main():
             indent=2
         )
 
-    print(
-        f"[+] Context Packs: "
-        f"{len(contexts)}"
-    )
+    state["llm_contexts"] = contexts
 
     print(
-        f"[+] Output: {OUTPUT_FILE}"
+        f"[LLMContextBuilder] Generated "
+        f"{len(contexts)} context packs"
     )
+
+    return state
+
+
+def main():
+
+    state = {}
+
+    run(state)
 
 
 if __name__ == "__main__":

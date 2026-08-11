@@ -1,11 +1,19 @@
 {
-  "Risk Score": 0,
-  "Overall Risk": "UNKNOWN",
-  "Most Likely Attack": "Failed to determine.",
-  "Most Dangerous Attack": "Failed to determine.",
-  "Exploitability Assessment": "Failed to assess.",
-  "Business Impact": "Failed to generate business impact.",
-  "Prioritized Findings": [],
-  "Remediation Priority": "Unknown",
-  "Remediation Order": []
+  "Risk Score": 85,
+  "Overall Risk": "CRITICAL",
+  "Most Likely Attack": "SQL Injection via /SqlInjectionAdvanced/register endpoint",
+  "Most Dangerous Attack": "SQL Injection via /SqlInjectionAdvanced/register endpoint",
+  "Exploitability Assessment": "High. The vulnerabilities are directly related to SQL injection, which is a well-known and easily exploitable issue.",
+  "Business Impact": "High. SQL injection can lead to data theft, manipulation, or complete loss of sensitive information, severely impacting operations and reputation.",
+  "Prioritized Findings": [
+    "/SqlInjectionAdvanced/register - registerNewUser, checkArguments methods",
+    "/challenge/5 - login method",
+    "/SqlInjection/attack10 - completed, injectableQueryAvailability, tableExists methods"
+  ],
+  "Remediation Priority": "Fix the SQL injection vulnerabilities first as they pose the highest risk.",
+  "Remediation Order": [
+    "Replace manually constructed SQL strings with prepared statements in /SqlInjectionAdvanced/register method.",
+    "Ensure all user inputs are properly sanitized and validated before use in SQL queries across the application.",
+    "Review and update the login method to ensure it does not expose any vulnerabilities."
+  ]
 }

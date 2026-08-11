@@ -7,6 +7,7 @@ OUTPUT_FILE = "reports/security_reasoning.json"
 def run(state):
     knowledge_graph = state.get("security_knowledge_graph", {})
     attack_paths = state.get("attack_paths", [])
+    llm_contexts = state.get("llm_contexts", [])
 
     # Other context
     sast_incidents = state.get("incidents", [])
@@ -34,6 +35,7 @@ def run(state):
     runtime_observations = state.get("security_knowledge_graph", {}).get("raw_inputs", {}).get("runtime_observations", [])
     runtime_evidence = state.get("security_knowledge_graph", {}).get("raw_inputs", {}).get("runtime_evidence", [])
     runtime_flow_evidence = state.get("security_knowledge_graph", {}).get("raw_inputs", {}).get("runtime_flow_evidence", [])
+    llm_contexts = state.get("llm_contexts", [])
 
     # We pass minimal structure to avoid blowing up context window
     nodes_summary = [
@@ -62,11 +64,17 @@ RUNTIME OBSERVATIONS:
 ATTACK PATHS:
 {json.dumps(attack_paths, indent=2)[:2000]}
 
+LLM FINDING CONTEXT:
+{json.dumps(llm_contexts, indent=2)[:6000]}che
+
 RUNTIME EVIDENCE:
 {json.dumps(runtime_evidence, indent=2)[:2000]}
 
 RUNTIME FLOW EVIDENCE (DATA FLOW):
 {json.dumps(runtime_flow_evidence, indent=2)[:2000]}
+
+LLM CONTEXT PACKS:
+{json.dumps(llm_contexts, indent=2)[:12000]}
 
 SAST FINDINGS:
 {json.dumps(sast_incidents, indent=2)[:2000]}
@@ -102,6 +110,9 @@ Return ONLY valid JSON in exactly this format:
   "Remediation Order": ["...", "...", "..."]
 }}
 """
+    print(
+        f"[SecurityReasoningAgent] LLM context packs available: {len(llm_contexts)}"
+    )
     print("[SecurityReasoningAgent] Calling AI model for comprehensive runtime-aware reasoning...")
 
     try:
