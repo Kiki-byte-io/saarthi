@@ -125,29 +125,89 @@ def run(state):
                 "boundary_crossed": boundary_info
             })
 
-    # Optional: Combine with SAST if we had SAST findings in graph
-    for incident in sast_incidents:
-        name = incident.get("label", "")
-        matching_evidence = [e for e in runtime_evidence if e.get("finding_id") == name]
+    # Build attack paths from actual SAST findings in the knowledge graph.
+    # Do not rely on LLM-generated incident names.
 
-        if "sql injection" in name.lower():
-             path_steps = [
-                    "External Input",
-                    "Malicious Payload Injection",
-                    "Database Access",
-                    "Sensitive Data Exposure"
-             ]
-             if matching_evidence:
-                 path_steps.insert(2, "RUNTIME CONFIRMED: Vulnerable code path executed")
-                 if any(e.get("evidence_type") == "sink_reached" for e in matching_evidence):
-                     path_steps.insert(3, "RUNTIME CONFIRMED: Database sink reached")
+    sast_finding_nodes = [
+        node for node in nodes
+        if node.get("type") == "finding"
+        and node.get("source") == "SAST"
+    ]
 
-             attack_paths.append({
-                "name": "SQL Injection Chain",
-                "path": path_steps,
-                "impact": "Data Breach / Complete Compromise",
-                "boundary_crossed": "Data Access Boundary"
-            })
+    for finding in sast_finding_nodes:
+
+        finding_id = finding.get("id")
+        name = finding.get("label", "Unknown vulnerability")
+
+        matching_evidence = [
+            e for e in runtime_evidence
+            if e.get("finding_id") in {finding_id, name}
+        ]
+
+        path_steps = [
+            "External Input",
+            f"Vulnerability: {name}",
+        ]
+
+        # Use graph relationships to describe where the vulnerability exists.
+        related_edges = [
+            e for e in edges
+            if e.get("target") == finding_id
+        ]
+
+        for edge in related_edges:
+
+            source = edge.get("source", "")
+
+            if source.startswith("Chain_"):
+                path_steps.append(
+                    f"Application Call Chain: {source.replace('Chain_', '', 1)}"
+                )
+
+            elif source.startswith("Method_"):
+                path_steps.append(
+                    f"Method: {source.replace('Method_', '', 1)}"
+                )
+
+        # Runtime evidence upgrades the path from static inference
+        # to runtime-confirmed evidence.
+        if matching_evidence:
+            path_steps.append(
+                "RUNTIME CONFIRMED: Vulnerable code path executed"
+            )
+
+            if any(
+                e.get("evidence_type") == "sink_reached"
+                for e in matching_evidence
+            ):
+                path_steps.append(
+                    "RUNTIME CONFIRMED: Sensitive sink reached"
+                )
+
+        path_steps.append("Impact Realization")
+
+        confidence = finding.get("confidence", "UNKNOWN")
+
+        attack_paths.append({
+            "name": f"SAST Attack Path: {name}",
+            "path": path_steps,
+            "impact": (
+                f"Potential impact associated with {name}"
+            ),
+            "boundary_crossed": (
+                "Data Access Boundary"
+                if any(
+                    e.get("relationship") == "crosses"
+                    for e in edges
+                    if e.get("source") == finding_id
+                )
+                else "Not Established"
+            ),
+            "finding_id": finding.get("finding_id"),
+            "severity": finding.get("severity"),
+            "confidence": confidence,
+            "runtime_confirmed": bool(matching_evidence)
+        })
 
     # Integrate Runtime Flow Evidence into Attack Paths
     for flow in runtime_flow_evidence:

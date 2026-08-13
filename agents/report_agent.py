@@ -95,12 +95,77 @@ def run(state):
 
         # Executive Summary
         f.write("## Executive Summary\n\n")
-        f.write(f"**Overall Risk Level:** {reasoning.get('Overall Risk', 'UNKNOWN')} ({reasoning.get('Risk Score', 'N/A')}/100)\n\n")
-        f.write("### Summary of Findings\n")
-        f.write(f"Saarthi's analysis of the target application has identified a total of {len(sast_incidents)} SAST incidents and {len(dast_incidents)} DAST incidents. ")
-        f.write(f"Through runtime observation, we've correlated these findings into {len(attack_paths)} critical attack chains.\n\n")
-        f.write("The assessment highlights significant risks in the application's handling of external inputs and session management, ")
-        f.write("particularly where they cross defined trust boundaries.\n\n")
+
+        risk_score = reasoning.get("Risk Score", "N/A")
+        overall_risk = reasoning.get("Overall Risk", "UNKNOWN")
+
+        f.write(
+            f"**Overall Risk Level:** {overall_risk} "
+            f"({risk_score}/100)\n\n"
+        )
+
+        f.write("### Assessment Overview\n\n")
+
+        f.write(
+            f"- **SAST incidents:** {len(sast_incidents)}\n"
+        )
+        f.write(
+            f"- **DAST incidents:** {len(dast_incidents)}\n"
+        )
+        f.write(
+            f"- **Underlying attack paths:** {len(attack_paths)}\n"
+        )
+        f.write(
+            f"- **Statically discovered endpoints:** {endpoints_count}\n"
+        )
+        f.write(
+            f"- **Runtime observations:** {len(runtime_observations)}\n"
+        )
+        f.write(
+            f"- **Runtime-confirmed vulnerabilities:** "
+            f"{len([e for e in runtime_evidence if e.get('confirmed')])}\n\n"
+        )
+
+        if runtime_observations or runtime_evidence or runtime_flow_evidence:
+
+            f.write("### Validation Status\n\n")
+            f.write(
+                "**Runtime validation was available during this assessment.** "
+                "Static findings can therefore be correlated with observed "
+                "application behaviour where supporting runtime evidence exists.\n\n"
+            )
+
+        else:
+
+            f.write("### Validation Status\n\n")
+            f.write(
+                "**Static analysis only — no runtime validation was performed.** "
+                "The findings represent security risks identified from the "
+                "repository and should be validated in a controlled runtime "
+                "environment before being considered runtime-confirmed.\n\n"
+            )
+
+        f.write("### Key Risk Areas\n\n")
+
+        prioritized_findings = reasoning.get(
+            "Prioritized Findings",
+            []
+        )
+
+        if prioritized_findings:
+
+            for finding in prioritized_findings[:3]:
+                f.write(f"- {finding}\n")
+
+            f.write("\n")
+
+        f.write(
+            "The assessment combines repository analysis, dependency analysis, "
+            "secret detection, API discovery, call-graph analysis, reachability "
+            "analysis, and security reasoning. Runtime confirmation is reported "
+            "separately so that statically inferred risk is not presented as "
+            "proven exploitation.\n\n"
+        )
 
         # Architecture Overview
         f.write("## Architecture Overview\n\n")
@@ -122,13 +187,22 @@ def run(state):
 
         # Attack Surface
         f.write("## Attack Surface\n\n")
-        f.write(f"- **Discovered Endpoints:** {endpoints_count}\n")
-        f.write(f"- **Observed Traffic Flows:** {len(runtime_observations)}\n")
+        f.write(f"- **Statically Discovered Endpoints:** {endpoints_count}\n")
+        f.write(f"- **Runtime Observed Events:** {len(runtime_observations)}\n")
+        f.write(f"- **Observed Traffic Flows:** {len(runtime_flow_evidence)}\n")
         f.write(f"- **Runtime Confirmed Vulnerabilities:** {len([e for e in runtime_evidence if e.get('confirmed')])}\n")
         f.write(f"- **Detected Framework:** {app_type}\n\n")
-        f.write("The attack surface comprises all reachable endpoints identified during the discovery phase. ")
-        f.write("Runtime evidence confirms that these endpoints are active and accessible under the current configuration.\n\n")
-
+        if runtime_observations:
+            f.write(
+                "The attack surface combines endpoints identified through "
+                "static analysis and endpoints observed during runtime discovery.\n\n"
+            )
+        else:
+            f.write(
+                "The attack surface represents endpoints identified through "
+                "static repository analysis. Runtime accessibility was not "
+                "validated in this assessment mode.\n\n"
+            )
         # Runtime Data Flows
         f.write("## Runtime Data Flows\n\n")
         if runtime_flow_evidence:
@@ -329,48 +403,164 @@ def run(state):
             f.write(f"- **Relationship Types:** {', '.join(graph_stats.get('edge_types', []))}\n\n")
 
         # Attack Chains
-        f.write("## Attack Chains\n\n")
+        f.write("## Attack Scenarios\n\n")
 
         if attack_paths:
 
-            for idx, path in enumerate(attack_paths):
+            # Group paths by vulnerability name.
+            grouped_paths = {}
+
+            for path in attack_paths:
 
                 if not isinstance(path, dict):
                     continue
 
-                f.write(
-                    f"### {idx + 1}. {path.get('name', 'Unnamed Path')}\n"
-                )
+                name = path.get("name", "Unnamed Path")
 
-                f.write(
-                    f"**Boundary Crossed:** "
-                    f"{path.get('boundary_crossed', 'N/A')}\n"
-                )
-
-                f.write(
-                    f"**Impact:** "
-                    f"{path.get('impact', 'N/A')}\n\n"
-                )
-
-                f.write("**Chain:**\n")
-
-                path_steps = path.get(
-                    "path",
-                    []
-                )
-
-                if not isinstance(path_steps, list):
-                    path_steps = []
-
-                for step in path_steps:
-                    f.write(
-                        f"- {step}\n"
+                # Remove the generic SAST prefix so that
+                # multiple findings of the same vulnerability
+                # are presented as one attack scenario.
+                if name.startswith("SAST Attack Path: "):
+                    group_name = name.replace(
+                        "SAST Attack Path: ",
+                        "",
+                        1
                     )
+                else:
+                    group_name = name
+
+                grouped_paths.setdefault(
+                    group_name,
+                    []
+                ).append(path)
+
+            f.write(
+                f"Saarthi identified **{len(attack_paths)} underlying "
+                f"attack paths**, grouped into **{len(grouped_paths)} "
+                f"attack scenarios** for readability. The underlying "
+                f"paths remain available in `reports/attack_chains.json`.\n\n"
+            )
+
+            for idx, (group_name, paths) in enumerate(
+                grouped_paths.items(),
+                1
+            ):
+
+                f.write(
+                    f"### {idx}. {group_name}\n\n"
+                )
+
+                # Highest severity represented in this scenario.
+                severity_order = {
+                    "CRITICAL": 4,
+                    "HIGH": 3,
+                    "MEDIUM": 2,
+                    "LOW": 1,
+                    "INFO": 0
+                }
+
+                severities = [
+                    p.get("severity")
+                    for p in paths
+                    if p.get("severity")
+                ]
+
+                highest_severity = (
+                    max(
+                        severities,
+                        key=lambda s: severity_order.get(s, 0)
+                    )
+                    if severities
+                    else "N/A"
+                )
+
+                f.write(
+                    f"- **Related attack paths:** {len(paths)}\n"
+                )
+                f.write(
+                    f"- **Highest severity:** {highest_severity}\n"
+                )
+
+                boundaries = sorted({
+                    str(p.get("boundary_crossed"))
+                    for p in paths
+                    if p.get("boundary_crossed")
+                    and str(p.get("boundary_crossed")) != "N/A"
+                })
+
+                if boundaries:
+                    f.write(
+                        "- **Trust boundaries:** "
+                        + ", ".join(boundaries)
+                        + "\n"
+                    )
+
+                impacts = sorted({
+                    str(p.get("impact"))
+                    for p in paths
+                    if p.get("impact")
+                    and str(p.get("impact")) != "N/A"
+                })
+
+                if impacts:
+                    f.write("- **Potential impact:**\n")
+                    for impact in impacts[:3]:
+                        f.write(f"  - {impact}\n")
+
+                # Show representative paths rather than dumping
+                # every duplicate path into the executive report.
+                f.write("\n**Representative attack path:**\n\n")
+
+                representative = paths[0].get("path", [])
+
+                if isinstance(representative, list):
+                    f.write(
+                        " → ".join(
+                            str(step)
+                            for step in representative
+                        )
+                        + "\n"
+                    )
+
+                # Show affected application locations where available.
+                locations = []
+
+                for p in paths:
+                    for step in p.get("path", []):
+                        if (
+                            isinstance(step, str)
+                            and step.startswith(
+                                "Application Call Chain:"
+                            )
+                        ):
+                            location = step.replace(
+                                "Application Call Chain:",
+                                "",
+                                1
+                            ).strip()
+
+                            if location not in locations:
+                                locations.append(location)
+
+                if locations:
+                    f.write("\n**Affected locations:**\n\n")
+
+                    for location in locations[:10]:
+                        f.write(
+                            f"- `{location}`\n"
+                        )
+
+                    if len(locations) > 10:
+                        f.write(
+                            f"- ...and "
+                            f"{len(locations) - 10} more locations\n"
+                        )
+
                 f.write("\n")
 
         else:
             f.write(
-                "No definitive attack chains were derived.\n\n"
+                "No definitive attack scenarios were derived.\n\n"
             )
 
         # AI-Assisted Reasoning
@@ -412,10 +602,29 @@ def run(state):
 
         # Executive Recommendations
         f.write("## Executive Recommendations\n\n")
-        f.write("It is highly recommended that the engineering teams prioritize the Top Risks identified in this report. ")
-        f.write("The integration of runtime evidence proves that these vulnerabilities are not just theoretical but reachable in the application's current deployment. ")
-        f.write("Following the Remediation Roadmap will systematically address the underlying structural vulnerabilities, reducing the overall risk exposure.")
 
+        f.write(
+            "It is highly recommended that the engineering teams prioritize "
+            "the Top Risks identified in this report. "
+        )
+
+        if runtime_evidence or runtime_flow_evidence:
+            f.write(
+                "Runtime evidence was available for this assessment, providing "
+                "additional validation of vulnerability reachability. "
+            )
+        else:
+            f.write(
+                "This assessment was performed without runtime confirmation. "
+                "The identified vulnerabilities should therefore be validated "
+                "in a controlled runtime environment before being treated as "
+                "confirmed exploitable issues. "
+            )
+
+        f.write(
+            "Following the Remediation Roadmap will systematically address "
+            "the underlying security weaknesses and reduce overall risk exposure."
+        )
     print(f"[ReportAgent] Saved high-quality final assessment to {OUTPUT_FILE}")
 
     return state

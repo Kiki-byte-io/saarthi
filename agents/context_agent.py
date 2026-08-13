@@ -10,8 +10,6 @@ def run(state):
     with open(INPUT_FILE) as f:
         findings = json.load(f)
 
-    findings = findings[:20]
-
     compact = []
 
     for finding in findings:
@@ -19,6 +17,8 @@ def run(state):
         compact.append({
             "finding_id": finding.get("finding_id"),
             "title": finding.get("title"),
+            "tool": finding.get("tool"),
+            "category": finding.get("category"),
             "severity": finding.get("severity"),
             "priority": finding.get("priority"),
             "file": finding.get("file"),

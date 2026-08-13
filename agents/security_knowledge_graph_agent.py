@@ -18,6 +18,10 @@ def run(state):
     attack_paths = state.get("attack_paths", [])
 
     sast_incidents = state.get("incidents", [])
+    sast_findings = [
+        f for f in state.get("findings", [])
+        if f.get("category") == "SAST"
+    ]
     if isinstance(sast_incidents, str):
         try:
             # Handle potential markdown or garbage in LLM response
@@ -156,24 +160,59 @@ def run(state):
         add_node(tb_id, "trust_boundary", label, source_zone=tb.get("source"), target_zone=tb.get("target"))
 
     # SAST Findings
-    for inc in sast_incidents:
-        name = inc.get("incident", "Unknown")
-        inc_id = f"SAST_Incident_{name}"
-        add_node(inc_id, "finding", name, source="SAST", type="vulnerability")
+    #
+    # Build finding nodes directly from normalized/prioritized findings.
+    # The Knowledge Graph must not depend on LLM correlation to preserve
+    # scanner evidence.
 
-        for f in inc.get("findings", []):
-            file = f.get("file", "") if isinstance(f, dict) else f
-            if file:
-                # Call Chain -> Vulnerability
-                chain_id = f"Chain_{file}"
-                if chain_id in nodes:
-                    add_edge(chain_id, inc_id, "contains_vulnerability")
+    for finding in sast_findings:
 
-                # Finding -> Trust Boundary
-                for idx, tb in enumerate(trust_boundaries):
-                    if "Data" in tb.get("boundary", ""):
-                         add_edge(inc_id, f"Boundary_{idx}", "crosses")
+        finding_id = finding.get("finding_id")
+        if not finding_id:
+            continue
 
+        title = finding.get("title", "Unknown Finding")
+
+        finding_node_id = f"SAST_Finding_{finding_id}"
+
+        add_node(
+            finding_node_id,
+            "finding",
+            title,
+            source="SAST",
+            category=finding.get("category"),
+            severity=finding.get("severity"),
+            confidence=finding.get("confidence"),
+            priority=finding.get("priority"),
+            final_score=finding.get("final_score"),
+            file=finding.get("file"),
+            line=finding.get("line"),
+            cwe=finding.get("cwe", []),
+            owasp=finding.get("owasp", []),
+            vulnerability_class=finding.get("vulnerability_class", []),
+            reachability_score=finding.get("reachability_score", 0)
+        )
+
+        file = finding.get("file", "")
+
+        if file:
+            chain_id = f"Chain_{file}"
+
+            if chain_id in nodes:
+                add_edge(
+                    chain_id,
+                    finding_node_id,
+                    "contains_vulnerability"
+                )
+
+            # Connect finding to the relevant trust boundary
+            for idx, tb in enumerate(trust_boundaries):
+                if "Data" in tb.get("boundary", ""):
+                    add_edge(
+                        finding_node_id,
+                        f"Boundary_{idx}",
+                        "crosses"
+                    )
 
     # DAST Findings
     for inc in dast_incidents:

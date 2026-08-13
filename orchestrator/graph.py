@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import subprocess
 
@@ -72,6 +73,27 @@ def main():
         print_stage("Dependency Graph")
 
         subprocess.run(["python3", "parsers/api_graph_builder.py"], check=False)
+
+        # Load API graph results into orchestrator state
+        try:
+            with open("reports/api_graph.json", "r") as f:
+                state["api_graph"] = json.load(f)
+
+            state["discovered_endpoints"] = [
+                endpoint
+                for entry in state["api_graph"]
+                for endpoint in entry.get("endpoints", [])
+            ]
+
+            print(
+                f"[+] Loaded {len(state['discovered_endpoints'])} "
+                "statically discovered endpoints"
+            )
+
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"[!] Failed to load API graph: {e}")
+            state["api_graph"] = []
+            state["discovered_endpoints"] = []
         print_stage("API Graph")
 
         subprocess.run(["python3", "parsers/method_index_builder.py", "--repo", repo_path], check=False)
@@ -148,6 +170,12 @@ def main():
 
     state = attack_path_agent(state)
     print_stage("Attack Path Generation")
+    # Refresh derived attack-surface statistics
+    if isinstance(state.get("attack_surface"), dict):
+        state["attack_surface"]["attack_paths"] = len(
+            state.get("attack_paths", [])
+        )
+
 
     state = security_reasoning_agent(state)
     print_stage("Security Reasoning")
