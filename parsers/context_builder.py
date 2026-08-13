@@ -12,9 +12,10 @@ REPO_ROOT = args.repo
 OUTPUT_FILE = "reports/repository_context.json"
 
 
-JAVA_EXTENSIONS = (
+SOURCE_EXTENSIONS = (
     ".java",
     ".kt",
+    ".php",
 )
 
 CONFIG_EXTENSIONS = (
@@ -35,11 +36,12 @@ DOC_EXTENSIONS = (
 def build_context():
 
     context = {
-        "source_files": [],
-        "config_files": [],
-        "documents": [],
-        "pom_files": [],
-    }
+    "source_files": [],
+    "config_files": [],
+    "documents": [],
+    "pom_files": [],
+    "composer_files": [],
+}
 
     for root, dirs, files in os.walk(REPO_ROOT):
 
@@ -50,7 +52,10 @@ def build_context():
             if file == "pom.xml":
                 context["pom_files"].append(path)
 
-            elif file.endswith(JAVA_EXTENSIONS):
+            elif file == "composer.json":
+                context["composer_files"].append(path)
+
+            elif file.endswith(SOURCE_EXTENSIONS):
                 context["source_files"].append(path)
 
             elif file.endswith(CONFIG_EXTENSIONS):
@@ -98,6 +103,10 @@ def main():
         f"[+] Saved: {OUTPUT_FILE}"
     )
 
+    print(
+    f"[+] Composer Files: "
+    f"{len(context['composer_files'])}"
+    )
 
 if __name__ == "__main__":
     main()

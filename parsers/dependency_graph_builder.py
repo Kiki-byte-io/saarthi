@@ -15,8 +15,7 @@ def parse_pom(pom_file):
         root = tree.getroot()
 
         ns = {
-            "m":
-            "http://maven.apache.org/POM/4.0.0"
+            "m": "http://maven.apache.org/POM/4.0.0"
         }
 
         for dep in root.findall(
@@ -40,20 +39,78 @@ def parse_pom(pom_file):
             )
 
             deps.append({
-                "group":
-                group.text if group is not None else "",
-
-                "artifact":
-                artifact.text if artifact is not None else "",
-
-                "version":
-                version.text if version is not None else ""
+                "ecosystem": "maven",
+                "group": (
+                    group.text
+                    if group is not None
+                    else ""
+                ),
+                "artifact": (
+                    artifact.text
+                    if artifact is not None
+                    else ""
+                ),
+                "version": (
+                    version.text
+                    if version is not None
+                    else ""
+                ),
+                "source_file": pom_file
             })
 
     except Exception as e:
 
         print(
             f"Error parsing {pom_file}: {e}"
+        )
+
+    return deps
+
+
+def parse_composer(composer_file):
+
+    deps = []
+
+    try:
+
+        with open(
+            composer_file,
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(f)
+
+        for name, version in data.get(
+            "require",
+            {}
+        ).items():
+
+            deps.append({
+                "ecosystem": "composer",
+                "group": "",
+                "artifact": name,
+                "version": version,
+                "source_file": composer_file
+            })
+
+        for name, version in data.get(
+            "require-dev",
+            {}
+        ).items():
+
+            deps.append({
+                "ecosystem": "composer",
+                "group": "",
+                "artifact": name,
+                "version": version,
+                "source_file": composer_file,
+                "development": True
+            })
+
+    except Exception as e:
+
+        print(
+            f"Error parsing {composer_file}: {e}"
         )
 
     return deps
@@ -67,10 +124,24 @@ def main():
 
     all_deps = []
 
-    for pom in context["pom_files"]:
+    # Maven dependencies
+    for pom in context.get(
+        "pom_files",
+        []
+    ):
 
         all_deps.extend(
             parse_pom(pom)
+        )
+
+    # Composer dependencies
+    for composer in context.get(
+        "composer_files",
+        []
+    ):
+
+        all_deps.extend(
+            parse_composer(composer)
         )
 
     with open(

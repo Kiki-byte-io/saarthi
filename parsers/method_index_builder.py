@@ -13,13 +13,19 @@ REPO_ROOT = args.repo
 OUTPUT_FILE = "reports/method_index.json"
 
 
-METHOD_PATTERN = re.compile(
+JAVA_METHOD_PATTERN = re.compile(
     r"(public|private|protected)\s+.*?\s+([a-zA-Z0-9_]+)\s*\(",
     re.MULTILINE
 )
 
+PHP_METHOD_PATTERN = re.compile(
+    r"(?:public|private|protected|static|\s)+"
+    r"function\s+([a-zA-Z0-9_]+)\s*\(",
+    re.MULTILINE
+)
 
-def extract_methods(path):
+
+def extract_java_methods(path):
 
     methods = []
 
@@ -34,7 +40,7 @@ def extract_methods(path):
 
             content = f.read()
 
-        matches = METHOD_PATTERN.findall(
+        matches = JAVA_METHOD_PATTERN.findall(
             content
         )
 
@@ -42,6 +48,37 @@ def extract_methods(path):
 
             methods.append(
                 match[1]
+            )
+
+    except Exception:
+        pass
+
+    return methods
+
+
+def extract_php_methods(path):
+
+    methods = []
+
+    try:
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8",
+            errors="ignore"
+        ) as f:
+
+            content = f.read()
+
+        matches = PHP_METHOD_PATTERN.findall(
+            content
+        )
+
+        for match in matches:
+
+            methods.append(
+                match
             )
 
     except Exception:
@@ -60,22 +97,36 @@ def main():
 
         for file in files:
 
-            if not file.endswith(".java"):
-                continue
-
             path = os.path.join(
                 root,
                 file
             )
 
-            methods = extract_methods(
-                path
-            )
+            if file.endswith(".java"):
+
+                methods = extract_java_methods(
+                    path
+                )
+
+                language = "java"
+
+            elif file.endswith(".php"):
+
+                methods = extract_php_methods(
+                    path
+                )
+
+                language = "php"
+
+            else:
+
+                continue
 
             if methods:
 
                 results.append({
                     "file": path,
+                    "language": language,
                     "methods": methods
                 })
 
@@ -93,6 +144,16 @@ def main():
     print(
         f"[+] Files Indexed: "
         f"{len(results)}"
+    )
+
+    total_methods = sum(
+        len(x["methods"])
+        for x in results
+    )
+
+    print(
+        f"[+] Methods Indexed: "
+        f"{total_methods}"
     )
 
     print(
